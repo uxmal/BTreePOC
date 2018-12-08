@@ -9,7 +9,6 @@ namespace BTreePOC
     public class BTreeDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
         private const int NodesPerLevel = 256;
-
         private Node root;
         private IComparer<TKey> cmp;
         private int count;
@@ -30,6 +29,8 @@ namespace BTreePOC
             public abstract void Add(TKey key, TValue value, IComparer<TKey> cmp);
 
             public abstract TValue Get(TKey key, IComparer<TKey> cmp);
+
+            public abstract void Set(TKey key, TValue value, IComparer<TKey> cmp);
         }
 
         private class LeafNode : Node 
@@ -59,6 +60,17 @@ namespace BTreePOC
                 if (idx < 0)
                     throw new KeyNotFoundException();
                 return values[idx];
+            }
+
+            public override void Set(TKey key, TValue value, IComparer<TKey> cmp)
+            {
+                int idx = Array.BinarySearch(keys, 0, count, key, cmp);
+                if (idx >= 0)
+                {
+                    values[idx] = value;
+                    return;
+                }
+                Insert(~idx, key, value);
             }
 
             private void Insert(int idx, TKey key, TValue value)
@@ -98,6 +110,11 @@ namespace BTreePOC
             {
                 throw new NotImplementedException();
             }
+
+            public override void Set(TKey key, TValue value, IComparer<TKey> cmp)
+            {
+                throw new NotImplementedException();
+            }
         }
 
         public TValue this[TKey key]
@@ -111,7 +128,9 @@ namespace BTreePOC
 
             set
             {
-                throw new NotImplementedException();
+                EnsureRoot();
+                root.Set(key, value, cmp);
+                ++version;
             }
         }
 

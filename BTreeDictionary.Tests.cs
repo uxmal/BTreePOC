@@ -71,5 +71,22 @@ namespace BTreePOC
             {
             }
         }
+
+        [Test]
+        public void BTree_SetNonExisting()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            btree["3"] = 3;
+            Assert.AreEqual(3, btree["3"]);
+        }
+
+        [Test]
+        public void BTree_SetExisting()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            btree["3"] = 3;
+            btree["3"] = 2;
+            Assert.AreEqual(2, btree["3"]);
+        }
     }
 }
