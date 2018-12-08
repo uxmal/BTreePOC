@@ -22,7 +22,7 @@ namespace BTreePOC
 
         private abstract class Node
         {
-            public int index;
+            public int totalCount;
             public int count;
             public InternalNode parent;
 
@@ -33,6 +33,7 @@ namespace BTreePOC
         {
             public TKey[] keys;
             public TValue[] values;
+            public LeafNode nextLeaf;
 
             public LeafNode(InternalNode parent)
             {
@@ -55,12 +56,12 @@ namespace BTreePOC
                     throw new NotImplementedException("Split this node");
                 if (idx < count)
                 {
-                    Array.Copy(keys, idx, keys, idx + 1, count - index);
-                    Array.Copy(values, idx, values, idx + 1, count - index);
+                    Array.Copy(keys, idx, keys, idx + 1, count - idx);
+                    Array.Copy(values, idx, values, idx + 1, count - idx);
                 }
                 keys[idx] = key;
                 values[idx] = value;
-
+                ++count;
             }
         }
 
@@ -149,7 +150,20 @@ namespace BTreePOC
 
         public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
         {
-            throw new NotImplementedException();
+            if (root == null)
+                yield break;
+            Node node;
+            for (node = root; node is InternalNode intern; node = intern.nodes[0])
+                ;
+            var leaf = (LeafNode)node;
+            while (leaf != null)
+            {
+                for (int i = 0; i < leaf.count; ++i)
+                {
+                    yield return new KeyValuePair<TKey, TValue>(leaf.keys[i], leaf.values[i]);
+                }
+                leaf = leaf.nextLeaf;
+            }
         }
 
         public bool Remove(TKey key)
