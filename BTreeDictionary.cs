@@ -13,20 +13,23 @@ namespace BTreePOC
         private Node root;
         private IComparer<TKey> cmp;
         private int count;
+        private int version;
 
         public BTreeDictionary()
         {
             this.cmp = Comparer<TKey>.Default;
             this.count = 0;
+            this.version = 0;
         }
 
         private abstract class Node
         {
-            public int totalCount;
             public int count;
             public InternalNode parent;
 
             public abstract void Add(TKey key, TValue value, IComparer<TKey> cmp);
+
+            public abstract TValue Get(TKey key, IComparer<TKey> cmp);
         }
 
         private class LeafNode : Node 
@@ -50,6 +53,14 @@ namespace BTreePOC
                 Insert(~idx, key, value);
             }
 
+            public override TValue Get(TKey key, IComparer<TKey> cmp)
+            {
+                int idx = Array.BinarySearch(keys, 0, count, key, cmp);
+                if (idx < 0)
+                    throw new KeyNotFoundException();
+                return values[idx];
+            }
+
             private void Insert(int idx, TKey key, TValue value)
             {
                 if (count == keys.Length)
@@ -69,6 +80,7 @@ namespace BTreePOC
         {
             public TKey[] Keys;
             public Node[] nodes;
+            public int totalCount;
 
             public InternalNode(InternalNode parent)
             {
@@ -81,13 +93,20 @@ namespace BTreePOC
             {
                 throw new NotImplementedException();
             }
+
+            public override TValue Get(TKey key, IComparer<TKey> cmp)
+            {
+                throw new NotImplementedException();
+            }
         }
 
         public TValue this[TKey key]
         {
             get
             {
-                throw new NotImplementedException();
+                if (root == null)
+                    throw new KeyNotFoundException();
+                return root.Get(key, cmp);
             }
 
             set
@@ -120,6 +139,7 @@ namespace BTreePOC
         {
             EnsureRoot();
             root.Add(key, value, cmp);
+            ++version;
             ++count;
         }
 
@@ -156,10 +176,13 @@ namespace BTreePOC
             for (node = root; node is InternalNode intern; node = intern.nodes[0])
                 ;
             var leaf = (LeafNode)node;
+            int myVersion = this.version;
             while (leaf != null)
             {
                 for (int i = 0; i < leaf.count; ++i)
                 {
+                    if (myVersion != this.version)
+                        throw new InvalidOperationException("Collection was modified after the enumerator was instantiated.");
                     yield return new KeyValuePair<TKey, TValue>(leaf.keys[i], leaf.values[i]);
                 }
                 leaf = leaf.nextLeaf;
@@ -183,7 +206,7 @@ namespace BTreePOC
 
         IEnumerator IEnumerable.GetEnumerator()
         {
-            throw new NotImplementedException();
+            return GetEnumerator();
         }
 
         private void EnsureRoot()

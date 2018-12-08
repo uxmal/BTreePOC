@@ -46,5 +46,30 @@ namespace BTreePOC
             Assert.AreEqual(3, e.Current.Value);
             Assert.IsFalse(e.MoveNext());
         }
+
+        [Test]
+        public void BTree_Get()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            btree.Add("3", 3);
+            Assert.AreEqual(3, btree["3"]);
+        }
+
+        [Test]
+        public void BTree_EnumeratorThrowIfMutated()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            btree.Add("3", 3);
+            var e = btree.GetEnumerator();
+            Assert.True(e.MoveNext());
+            btree.Add("2", 2);
+            try
+            {
+                e.MoveNext();
+                Assert.Fail("Should have thrown exception");
+            } catch (InvalidOperationException)
+            {
+            }
+        }
     }
 }
