@@ -13,5 +13,13 @@ namespace BTreePOC
         {
             var btree = new BTreeDictionary<string, int>();
         }
+
+        [Test]
+        public void BTree_AddItem()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            btree.Add("3", 3);
+            Assert.AreEqual(1, btree.Count);
+        }
     }
 }

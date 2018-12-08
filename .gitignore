@@ -2,8 +2,8 @@
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
-/.vs/BTreePOC/v15
-/bin/Debug
-/obj/Debug
-/packages/NUnit.3.11.0
+/.vs/
+/bin/
+/obj/
+/packages
 *.user
