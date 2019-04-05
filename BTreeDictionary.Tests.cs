@@ -1,6 +1,7 @@
 ﻿using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 
@@ -87,6 +88,31 @@ namespace BTreePOC
             btree["3"] = 3;
             btree["3"] = 2;
             Assert.AreEqual(2, btree["3"]);
+        }
+
+        [Test]
+        public void BTree_ForceInternalNode()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            foreach (var i in Enumerable.Range(0, 256))
+            {
+                btree.Add(i.ToString(), i);
+            }
+            btree.Add("256", 256);
+        }
+
+        [Test]
+        public void BTree_GetFromDeepTree()
+        {
+            var btree = new BTreeDictionary<string, int>();
+            foreach (var i in Enumerable.Range(0, 1000))
+            {
+                btree.Add(i.ToString(), i);
+                Debug.WriteLine("======");
+                btree.Dump();
+            }
+            Assert.AreEqual(0, btree["0"]);
+            Assert.AreEqual(500, btree["500"]);
         }
     }
 }
