@@ -34,7 +34,7 @@ namespace itp
                 foreach (var i in Enumerable.Range(0, items))
                 {
                     var ii = items - (i + 1);
-                    btree.Add(ii.ToString(), ii);
+                    btree[ii.ToString()] = ii;
                 }
                 var msec = (DateTime.UtcNow - uStart).TotalMilliseconds;
                 totalmsec += msec;

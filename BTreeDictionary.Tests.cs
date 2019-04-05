@@ -110,30 +110,30 @@ namespace BTreePOC
                 btree.Add(i.ToString(), i);
             }
             btree.Dump();
-            //Assert.AreEqual(0, btree["0"]);
+            Assert.AreEqual(0, btree["0"]);
             Assert.AreEqual(500, btree["500"]);
         }
 
         [Test]
-        public void BTree_1_000_000()
+        public void BTree_ItemsSorted()
         {
-            const int trials = 4;
-            const int items = 50_000;
-            var totalmsec = 0.0;
-            for (int j = 0; j < trials; ++j)
+            var rnd = new Random(42);
+            var btree = new BTreeDictionary<string, int>();
+            while (btree.Count < 23)
             {
-                var uStart = DateTime.UtcNow;
-                IDictionary<string,int> btree =
-                    //new BTreeDictionary<string, int>();
-                    new SortedList<string, int>();
-                foreach (var i in Enumerable.Range(0, items))
-                {
-                    btree.Add(i.ToString(), i);
-                }
-                var msec = (DateTime.UtcNow - uStart).TotalMilliseconds;
-                totalmsec += msec;
+                var n = rnd.Next(300_000);
+                var s = n.ToString();
+                btree[s] = n;
             }
-            Console.WriteLine("average time / item: {0,4}", totalmsec / (trials * items));
+            btree.Dump();
+            string prev = "";
+            foreach (var item in btree)
+            {
+                var cur = item.Key;
+                Debug.Print("item.Key: {0}", item.Key);
+                Assert.Less(prev, cur);
+                prev = cur;
+            }
         }
     }
 }
