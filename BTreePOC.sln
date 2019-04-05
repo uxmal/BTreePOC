@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28010.2048
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTreePOC", "BTreePOC.csproj", "{C01C39E2-E05F-47DF-8013-523E41E1E599}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BTreePOC", "BTreePOC.csproj", "{C01C39E2-E05F-47DF-8013-523E41E1E599}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "itp", "itp\itp.csproj", "{8401E268-6795-4201-B2B6-E06872B706B6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{C01C39E2-E05F-47DF-8013-523E41E1E599}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C01C39E2-E05F-47DF-8013-523E41E1E599}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C01C39E2-E05F-47DF-8013-523E41E1E599}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8401E268-6795-4201-B2B6-E06872B706B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8401E268-6795-4201-B2B6-E06872B706B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8401E268-6795-4201-B2B6-E06872B706B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8401E268-6795-4201-B2B6-E06872B706B6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

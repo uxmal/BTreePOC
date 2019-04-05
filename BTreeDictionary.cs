@@ -9,19 +9,21 @@ namespace BTreePOC
 {
     public class BTreeDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
-        private const int InternalNodeChildren = 4;
-        private const int LeafNodeChildren = 3;
 
         private Node root;
         private IComparer<TKey> cmp;
         private int count;
         private int version;
+        private int InternalNodeChildren;
+        private int LeafNodeChildren;
 
         public BTreeDictionary()
         {
             this.cmp = Comparer<TKey>.Default;
             this.count = 0;
             this.version = 0;
+            this.InternalNodeChildren = 16;
+            this.LeafNodeChildren = InternalNodeChildren - 1;
         }
 
         public BTreeDictionary(IComparer<TKey> cmp)
@@ -45,7 +47,7 @@ namespace BTreePOC
 
             public override string ToString()
             {
-                return $"{GetType().Name}: {count} items";
+                return $"{GetType().Name}: {count} items; keys: {string.Join(",",keys)}.";
             }
         }
 
@@ -54,11 +56,11 @@ namespace BTreePOC
             public LeafNode nextLeaf;
             public TValue[] values;
 
-            public LeafNode(InternalNode parent)
+            public LeafNode(InternalNode parent, int children)
             {
                 this.parent = parent;
-                this.keys = new TKey[LeafNodeChildren];
-                this.values = new TValue[LeafNodeChildren];
+                this.keys = new TKey[children];
+                this.values = new TValue[children];
             }
 
             public override (Node, Node) Add(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
@@ -117,7 +119,7 @@ namespace BTreePOC
             private Node SplitAndInsert(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
             {
                 var iSplit = (count + 1) / 2;
-                var right = new LeafNode(parent);
+                var right = new LeafNode(parent, tree.LeafNodeChildren);
                 right.count = count - iSplit;
                 this.count = iSplit;
 
@@ -137,7 +139,7 @@ namespace BTreePOC
 
         private InternalNode NewInternalRoot(Node left, Node right)
         {
-            var intern = new InternalNode(null);
+            var intern = new InternalNode(null, InternalNodeChildren);
             intern.count = 2;
             intern.keys[0] = left.keys[0];
             intern.keys[1] = right.keys[0];
@@ -153,16 +155,16 @@ namespace BTreePOC
             public Node[] nodes;
             public int totalCount;
 
-            public InternalNode(InternalNode parent)
+            public InternalNode(InternalNode parent, int children)
             {
                 this.parent = parent;
-                this.keys = new TKey[InternalNodeChildren];
-                this.nodes = new Node[InternalNodeChildren];
+                this.keys = new TKey[children];
+                this.nodes = new Node[children];
             }
 
             public override (Node, Node) Add(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
             {
-                int idx = Array.BinarySearch(keys, 0, count, key, tree.cmp);
+                int idx = Array.BinarySearch(keys, 1, count-1, key, tree.cmp);
                 if (idx >= 0)
                     throw new ArgumentException("Duplicate key.");
                 int iPos = (~idx) - 1;
@@ -184,11 +186,14 @@ namespace BTreePOC
 
             public override TValue Get(TKey key, BTreeDictionary<TKey, TValue> tree)
             {
-                int idx = Array.BinarySearch(keys, 0, count - 1, key, tree.cmp);
+                int idx = Array.BinarySearch(keys, 1, count - 1, key, tree.cmp);
                 if (idx >= 0)
                     return nodes[idx].Get(key, tree);
                 else
-                    return nodes[~idx].Get(key, tree);
+                {
+                    var iPos = (~idx) - 1;
+                    return nodes[iPos].Get(key, tree);
+                }
             }
 
             public override (Node, Node) Set(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
@@ -205,7 +210,7 @@ namespace BTreePOC
                 }
                 else if (idx < count)
                 {
-                    Array.Copy(keys, idx, keys, idx, count - idx);
+                    Array.Copy(keys, idx, keys, idx + 1, count - idx);
                     Array.Copy(nodes, idx, nodes, idx + 1, count - idx);
                 }
                 keys[idx] = key;
@@ -217,7 +222,7 @@ namespace BTreePOC
             private Node SplitAndInsert(TKey key, Node node, BTreeDictionary<TKey, TValue> tree)
             {
                 var iSplit = (count + 1) / 2;
-                var right = new InternalNode(parent);
+                var right = new InternalNode(parent, tree.InternalNodeChildren);
                 right.count = count - iSplit;
                 this.count = iSplit;
                 Array.Copy(this.keys, iSplit, right.keys, 0, right.count);
@@ -350,7 +355,7 @@ namespace BTreePOC
         {
             if (root != null)
                 return;
-            root = new LeafNode(null);
+            root = new LeafNode(null, LeafNodeChildren);
         }
 
         [Conditional("DEBUG")]

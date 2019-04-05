@@ -3,8 +3,11 @@
     <TargetFrameworks>net472</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="itp\**" />
     <Compile Remove="packages\**" />
+    <EmbeddedResource Remove="itp\**" />
     <EmbeddedResource Remove="packages\**" />
+    <None Remove="itp\**" />
     <None Remove="packages\**" />
   </ItemGroup>
   <ItemGroup>
