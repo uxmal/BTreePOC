@@ -119,11 +119,14 @@ namespace BTreePOC
         {
             var rnd = new Random(42);
             var btree = new BTreeDictionary<string, int>();
-            while (btree.Count < 23)
+            while (btree.Count < 500)
             {
-                var n = rnd.Next(300_000);
+                var n = rnd.Next(3000);
                 var s = n.ToString();
+                Debug.Print("Adding {0}", s);
                 btree[s] = n;
+                btree.Dump();
+                Debug.WriteLine("======");
             }
             btree.Dump();
             string prev = "";

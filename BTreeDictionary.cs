@@ -19,7 +19,6 @@ namespace BTreePOC
         public BTreeDictionary()
         {
             this.cmp = Comparer<TKey>.Default;
-            this.Count = 0;
             this.version = 0;
             this.InternalNodeChildren = 16;
             this.LeafNodeChildren = InternalNodeChildren - 1;
@@ -29,13 +28,13 @@ namespace BTreePOC
         public BTreeDictionary(IComparer<TKey> cmp)
         {
             this.cmp = cmp ?? throw new ArgumentNullException(nameof(cmp));
-            this.Count = 0;
             this.version = 0;
         }
 
         private abstract class Node
         {
             public int count;       // # of direct children
+            public int totalCount;  // # of recursively reachable children.
             public TKey[] keys;
 
             public abstract (Node, Node) Add(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree);
@@ -90,7 +89,6 @@ namespace BTreePOC
 
             private (Node, Node) Insert(int idx, TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
             {
-                ++tree.Count;
                 if (count == keys.Length)
                 {
                     var newRight = SplitAndInsert(key, value, tree);
@@ -105,6 +103,7 @@ namespace BTreePOC
                 keys[idx] = key;
                 values[idx] = value;
                 ++this.count;
+                ++this.totalCount;
                 return (this, null);
             }
 
@@ -121,7 +120,8 @@ namespace BTreePOC
                 var right = new LeafNode(tree.LeafNodeChildren);
                 right.count = count - iSplit;
                 this.count = iSplit;
-
+                right.totalCount = right.count;
+                this.totalCount = this.count;
                 Array.Copy(this.keys, iSplit, right.keys, 0, right.count);
                 Array.Clear(this.keys, iSplit, right.count);
                 Array.Copy(this.values, iSplit, right.values, 0, right.count);
@@ -139,7 +139,6 @@ namespace BTreePOC
         private class InternalNode : Node
         {
             public Node[] nodes;
-            public int totalCount;
 
             public InternalNode(int children)
             {
@@ -156,7 +155,10 @@ namespace BTreePOC
                 var subnode = nodes[iPos];
                 var (leftNode, rightNode) = subnode.Add(key, value, tree);
                 if (rightNode == null)
+                {
+                    this.totalCount = SumNodeCounts(this.nodes, this.count);
                     return (leftNode, null);
+                }
                 return Insert(iPos + 1, rightNode.keys[0], rightNode,  tree);
             }
 
@@ -190,8 +192,15 @@ namespace BTreePOC
                 var subnode = nodes[iPos];
                 var (leftNode, rightNode) = subnode.Set(key, value, tree);
                 if (rightNode == null)
+                {
+                    this.totalCount = SumNodeCounts(this.nodes, this.count);
+                    tree.Validate(this);
                     return (leftNode, null);
-                return Insert(iPos + 1, rightNode.keys[0], rightNode, tree);
+                }
+                else
+                {
+                    return Insert(iPos + 1, rightNode.keys[0], rightNode, tree);
+                }
             }
 
             internal (Node, Node) Insert(int idx, TKey key, Node node, BTreeDictionary<TKey, TValue> tree)
@@ -201,14 +210,15 @@ namespace BTreePOC
                     var newRight = SplitAndInsert(key, node, tree);
                     return (this, newRight);
                 }
-                else if (idx < count)
+                if (idx < count)
                 {
                     Array.Copy(keys, idx, keys, idx + 1, count - idx);
                     Array.Copy(nodes, idx, nodes, idx + 1, count - idx);
                 }
                 keys[idx] = key;
                 nodes[idx] = node;
-                ++count;
+                ++this.count;
+                this.totalCount = SumNodeCounts(this.nodes, this.count);
                 return (this, null);
             }
 
@@ -223,10 +233,24 @@ namespace BTreePOC
                 Array.Copy(this.nodes, iSplit, right.nodes, 0, right.count);
                 Array.Clear(this.nodes, iSplit, right.count);
                 if (tree.cmp.Compare(right.keys[0], key) < 0)
+                {
                     right.Add(key, node, tree);
+                    this.totalCount = SumNodeCounts(this.nodes, this.count);
+                }
                 else
+                {
                     this.Add(key, node, tree);
+                    right.totalCount = SumNodeCounts(right.nodes, right.count);
+                }
                 return right;
+            }
+
+            private static int SumNodeCounts(Node[] nodes, int count)
+            {
+                int n = 0;
+                for (int i = 0; i < count; ++i)
+                    n += nodes[i].totalCount;
+                return n;
             }
         }
 
@@ -246,8 +270,7 @@ namespace BTreePOC
                 if (right != null)
                     root = NewInternalRoot(left, right);
                 ++version;
-
-                ++version;
+                // Validate(root);
             }
         }
 
@@ -257,7 +280,7 @@ namespace BTreePOC
 
         public ICollection<TValue> Values => throw new NotImplementedException();
 
-        public int Count { get; private set; }
+        public int Count => root != null ? root.totalCount : 0;
 
         public bool IsReadOnly => false;
 
@@ -268,6 +291,7 @@ namespace BTreePOC
             if (right != null)
                 root = NewInternalRoot(left, right);
             ++version;
+            // Validate(root);
         }
 
         public void Add(KeyValuePair<TKey, TValue> item)
@@ -344,14 +368,6 @@ namespace BTreePOC
             root = new LeafNode(LeafNodeChildren);
         }
 
-        [Conditional("DEBUG")]
-        public void Dump()
-        {
-            if (root == null)
-                Debug.Print("(empty)");
-            Dump(root, 0);
-        }
-
         private TKey GetKey(int index)
         {
             throw new NotImplementedException();
@@ -361,6 +377,7 @@ namespace BTreePOC
         {
             var intern = new InternalNode(InternalNodeChildren);
             intern.count = 2;
+            intern.totalCount = left.totalCount + right.totalCount;
             intern.keys[0] = left.keys[0];
             intern.keys[1] = right.keys[0];
             intern.nodes[0] = left;
@@ -368,6 +385,15 @@ namespace BTreePOC
             return intern;
         }
 
+        #region Debugging code 
+
+        [Conditional("DEBUG")]
+        public void Dump()
+        {
+            if (root == null)
+                Debug.Print("(empty)");
+            Dump(root, 0);
+        }
 
         [Conditional("DEBUG")]
         private void Dump(Node n, int depth)
@@ -378,7 +404,7 @@ namespace BTreePOC
                 case InternalNode inode:
                     for (int i = 0; i < inode.count; ++i)
                     {
-                        Debug.Print("{0}{1}:", prefix, inode.keys[i]);
+                        Debug.Print("{0}{1}: total nodes: {2}", prefix, inode.keys[i], inode.nodes[i].totalCount);
                         Dump(inode.nodes[i], depth + 4);
                     }
                     break;
@@ -393,6 +419,32 @@ namespace BTreePOC
                     break;
             }
         }
+
+        [Conditional("DEBUG")]
+        private void Validate(Node node)
+        {
+            if (node is LeafNode leaf)
+            {
+                if (leaf.totalCount != leaf.count)
+                    throw new InvalidOperationException($"Leaf node {leaf} has mismatched counts.");
+            }
+            else if (node is InternalNode intern)
+            {
+                int sum = 0;
+                for (int i = 0; i < intern.count; ++i)
+                {
+                    Validate(intern.nodes[i]);
+                    sum += intern.nodes[i].totalCount;
+                }
+                if (sum != intern.totalCount)
+                {
+                    Dump();
+                    Console.WriteLine("# of nodes: {0}", this.Count);
+                    throw new InvalidOperationException($"Internal node {intern} has mismatched counts; expected {sum} but had {intern.totalCount}.");
+                }
+            }
+        }
+        #endregion
 
         public class BTreeKeyCollection : ICollection<TKey>
         {
