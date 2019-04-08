@@ -7,19 +7,38 @@ using System.Text;
 
 namespace BTreePOC
 {
+    /// <summary>
+    /// Represents a collection of key/value pairs that are sorted by the keys
+    /// and are accessible by key and by index. It's intended to be a drop-in
+    /// replacement for <see cref="System.Collections.Generic.SortedList{TKey, TValue}"/>.
+    /// </summary>
+    /// <remarks>
+    /// This class implemements most of the same API as <see cref="System.Collections.Generic.SortedList{TKey, TValue}"/>
+    /// but with much better performance. Where n random insertions into a 
+    /// SortedList have a complexity of O(n^2), the BtreeDictionary is 
+    /// organized as a B+tree, and this has a complexity of O(n log n). 
+    /// In addition, benchmark measurements show that BTreeDictionary is
+    /// about twice as fast as SortedDictionary (which also is O(n log n))
+    /// and in addition provides the IndexOf functionality from SortedList
+    /// that SortedDictionary lacks.
+    /// </remarks>
     public class BTreeDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
         private Node root;
-        private IComparer<TKey> cmp;
+        private readonly IComparer<TKey> cmp;
         private int version;
         private int InternalNodeChildren;
         private int LeafNodeChildren;
         private readonly KeyCollection keyCollection;
         private readonly ValueCollection valueCollection;
 
-        public BTreeDictionary()
+        public BTreeDictionary() :
+            this(Comparer<TKey>.Default) {
+        }
+
+        public BTreeDictionary(IComparer<TKey> cmp)
         {
-            this.cmp = Comparer<TKey>.Default;
+            this.cmp = cmp ?? throw new ArgumentNullException(nameof(cmp));
             this.version = 0;
             this.InternalNodeChildren = 16;
             this.LeafNodeChildren = InternalNodeChildren - 1;
@@ -27,10 +46,20 @@ namespace BTreePOC
             this.valueCollection = new ValueCollection(this);
         }
 
-        public BTreeDictionary(IComparer<TKey> cmp)
+        public BTreeDictionary(IDictionary<TKey,TValue> entries) :
+            this()
         {
-            this.cmp = cmp ?? throw new ArgumentNullException(nameof(cmp));
-            this.version = 0;
+            if (entries == null)
+                throw new ArgumentNullException(nameof(entries));
+            Populate(entries);
+        }
+
+        public BTreeDictionary(IDictionary<TKey,TValue> entries, IComparer<TKey> comparer) :
+            this(comparer)
+        {
+            if (entries == null)
+                throw new ArgumentNullException(nameof(entries));
+            Populate(entries);
         }
 
         private abstract class Node
@@ -53,9 +82,12 @@ namespace BTreePOC
             }
         }
 
+        /// <summary>
+        /// In a B+Tree, the values are held in the leaf nodes of the data structure.
+        /// </summary>
         private class LeafNode : Node 
         {
-            public LeafNode nextLeaf;
+            public LeafNode nextLeaf;   // leaves are threaded together for ease of enumeration.
             public TValue[] values;
 
             public LeafNode(int children)
@@ -128,12 +160,9 @@ namespace BTreePOC
             }
 
             /// <summary>
-            /// Split this node by creating a new "right" node and push
+            /// Splits this node into subnodes by creating a new "right" node
+            /// and adds the (key,value) to the appropriate subnode.
             /// </summary>
-            /// <param name="key"></param>
-            /// <param name="value"></param>
-            /// <param name="tree"></param>
-            /// <returns></returns>
             private Node SplitAndInsert(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
             {
                 var iSplit = (count + 1) / 2;
@@ -156,47 +185,9 @@ namespace BTreePOC
             }
         }
 
-        public int IndexOfKey(TKey key)
-        {
-            if (root == null)
-                return ~0;
-            int totalBefore = 0;
-            Node node = root;
-            int i;
-            while (node is InternalNode intern)
-            {
-                for (i = 1; i < intern.count; ++i)
-                {
-                    int c = cmp.Compare(intern.keys[i], key);
-                    if (c <= 0)
-                    {
-                        totalBefore += intern.nodes[i - 1].totalCount;
-                    }
-                    else
-                    {
-                        node = intern.nodes[i - 1];
-                        break;
-                    }
-                }
-                if (i == intern.count)
-                {
-                    // Key was larger than all nodes.
-                    node = intern.nodes[i - 1];
-                }
-            }
-            // Should have reached a leaf node.
-            var leaf = (LeafNode)node;
-            for (i = 0; i < leaf.count; ++i)
-            {
-                var c = cmp.Compare(leaf.keys[i], key);
-                if (c == 0)
-                    return totalBefore + i;
-                if (c > 0)
-                    break;
-            }
-            return ~(totalBefore + i);
-        }
-
+        /// <summary>
+        /// In a B+tree, the internals node only contain links to other nodes.
+        /// </summary>
         private class InternalNode : Node
         {
             public Node[] nodes;
@@ -445,6 +436,55 @@ namespace BTreePOC
             }
         }
 
+        /// <summary>
+        /// Determine the 0-based index of <paramref name="key"/>.
+        /// </summary>
+        /// <returns>
+        /// A non-negative number if the key is found. If the key is 
+        /// not found, returns the one's complement of the index the key would
+        /// have had if it were present in the collection.
+        /// </returns>
+        public int IndexOfKey(TKey key)
+        {
+            if (root == null)
+                return ~0;
+            int totalBefore = 0;
+            Node node = root;
+            int i;
+            while (node is InternalNode intern)
+            {
+                for (i = 1; i < intern.count; ++i)
+                {
+                    int c = cmp.Compare(intern.keys[i], key);
+                    if (c <= 0)
+                    {
+                        totalBefore += intern.nodes[i - 1].totalCount;
+                    }
+                    else
+                    {
+                        node = intern.nodes[i - 1];
+                        break;
+                    }
+                }
+                if (i == intern.count)
+                {
+                    // Key was larger than all nodes.
+                    node = intern.nodes[i - 1];
+                }
+            }
+            // Should have reached a leaf node.
+            var leaf = (LeafNode)node;
+            for (i = 0; i < leaf.count; ++i)
+            {
+                var c = cmp.Compare(leaf.keys[i], key);
+                if (c == 0)
+                    return totalBefore + i;
+                if (c > 0)
+                    break;
+            }
+            return ~(totalBefore + i);
+        }
+
         public bool Remove(TKey key)
         {
             if (root == null)
@@ -520,6 +560,14 @@ namespace BTreePOC
             return intern;
         }
 
+        private void Populate(IDictionary<TKey, TValue> entries)
+        {
+            foreach (var entry in entries)
+            {
+                Add(entry.Key, entry.Value);
+            }
+        }
+
         #region Debugging code 
 
         [Conditional("DEBUG")]
@@ -536,22 +584,22 @@ namespace BTreePOC
             var prefix = new string(' ', depth);
             switch (n)
             {
-                case InternalNode inode:
-                    for (int i = 0; i < inode.count; ++i)
-                    {
-                        Debug.Print("{0}{1}: total nodes: {2}", prefix, inode.keys[i], inode.nodes[i].totalCount);
-                        Dump(inode.nodes[i], depth + 4);
-                    }
-                    break;
-                case LeafNode leaf:
-                    for (int i = 0; i < leaf.count; ++i)
-                    {
-                        Debug.Print("{0}{1}: {2}", prefix, leaf.keys[i], leaf.values[i]);
-                    }
-                    break;
-                default:
-                    Debug.Print("{0}huh?", prefix);
-                    break;
+            case InternalNode inode:
+                for (int i = 0; i < inode.count; ++i)
+                {
+                    Debug.Print("{0}{1}: total nodes: {2}", prefix, inode.keys[i], inode.nodes[i].totalCount);
+                    Dump(inode.nodes[i], depth + 4);
+                }
+                break;
+            case LeafNode leaf:
+                for (int i = 0; i < leaf.count; ++i)
+                {
+                    Debug.Print("{0}{1}: {2}", prefix, leaf.keys[i], leaf.values[i]);
+                }
+                break;
+            default:
+                Debug.Print("{0}huh?", prefix);
+                break;
             }
         }
 
