@@ -15,15 +15,24 @@ namespace itp
             for (; ; )
             {
                 Console.WriteLine("Running tests with {0} items.", items);
-                RunTrial(items, () => new BTreeDictionary<string, int>(), "btree");
-                RunTrial(items, () => new SortedList<string, int>(), "SortedList");
-                RunTrial(items, () => new SortedDictionary<string, int>(), "SortedDictionary");
+                RunTrial(SetItemsBackward, items, () => new BTreeDictionary<string, int>(), "btree");
+                RunTrial(SetItemsBackward, items, () => new SortedList<string, int>(), "SortedList");
+                RunTrial(SetItemsBackward, items, () => new SortedDictionary<string, int>(), "SortedDictionary");
                 Console.WriteLine();
                 items *= 2;
             }
         }
 
-        private static double RunTrial(int items, Func<IDictionary<string,int>> mkdict, string caption)
+        private static void SetItemsBackward(IDictionary<string,int> dict, int items)
+        {
+            foreach (var i in Enumerable.Range(0, items))
+            {
+                var ii = items - (i + 1);
+                dict[ii.ToString()] = ii;
+            }
+        }
+
+        private static double RunTrial(Action<IDictionary<string,int>, int> kernel, int items, Func<IDictionary<string,int>> mkdict, string caption)
         {
             const int trials = 1;
             var totalmsec = 0.0;
@@ -31,11 +40,7 @@ namespace itp
             {
                 var uStart = DateTime.UtcNow;
                 IDictionary<string, int> btree = mkdict();
-                foreach (var i in Enumerable.Range(0, items))
-                {
-                    var ii = items - (i + 1);
-                    btree[ii.ToString()] = ii;
-                }
+                kernel(btree, items);
                 var msec = (DateTime.UtcNow - uStart).TotalMilliseconds;
                 totalmsec += msec;
             }
