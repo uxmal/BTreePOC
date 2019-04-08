@@ -14,7 +14,8 @@ namespace BTreePOC
         private int version;
         private int InternalNodeChildren;
         private int LeafNodeChildren;
-        private readonly BTreeKeyCollection keyCollection;
+        private readonly KeyCollection keyCollection;
+        private readonly ValueCollection valueCollection;
 
         public BTreeDictionary()
         {
@@ -22,7 +23,8 @@ namespace BTreePOC
             this.version = 0;
             this.InternalNodeChildren = 16;
             this.LeafNodeChildren = InternalNodeChildren - 1;
-            this.keyCollection = new BTreeKeyCollection(this);
+            this.keyCollection = new KeyCollection(this);
+            this.valueCollection = new ValueCollection(this);
         }
 
         public BTreeDictionary(IComparer<TKey> cmp)
@@ -134,6 +136,47 @@ namespace BTreePOC
                     this.Add(key, value, tree);
                 return right;
             }
+        }
+
+        public int IndexOfKey(TKey key)
+        {
+            if (root == null)
+                return ~0;
+            int totalBefore = 0;
+            Node node = root;
+            int i;
+            while (node is InternalNode intern)
+            {
+                for (i = 1; i < intern.count; ++i)
+                {
+                    int c = cmp.Compare(intern.keys[i], key);
+                    if (c <= 0)
+                    {
+                        totalBefore += intern.nodes[i - 1].totalCount;
+                    }
+                    else
+                    {
+                        node = intern.nodes[i - 1];
+                        break;
+                    }
+                }
+                if (i == intern.count)
+                {
+                    // Key was larger than all nodes.
+                    node = intern.nodes[i - 1];
+                }
+            }
+            // Should have reached a leaf node.
+            var leaf = (LeafNode)node;
+            for (i = 0; i < leaf.count; ++i)
+            {
+                var c = cmp.Compare(leaf.keys[i], key);
+                if (c == 0)
+                    return totalBefore + i;
+                if (c > 0)
+                    break;
+            }
+            return ~(totalBefore + i);
         }
 
         private class InternalNode : Node
@@ -275,10 +318,11 @@ namespace BTreePOC
         }
 
         ICollection<TKey> IDictionary<TKey, TValue>.Keys => Keys;
+        ICollection<TValue> IDictionary<TKey, TValue>.Values => Values;
 
-        public BTreeKeyCollection Keys => keyCollection;
+        public KeyCollection Keys => keyCollection;
 
-        public ICollection<TValue> Values => throw new NotImplementedException();
+        public ValueCollection Values => valueCollection;
 
         public int Count => root != null ? root.totalCount : 0;
 
@@ -312,6 +356,11 @@ namespace BTreePOC
         public bool ContainsKey(TKey key)
         {
             throw new NotImplementedException();
+        }
+
+        public bool ContainsValue(TValue value)
+        {
+            return this.Any(e => e.Value.Equals(value));
         }
 
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
@@ -368,9 +417,15 @@ namespace BTreePOC
             root = new LeafNode(LeafNodeChildren);
         }
 
-        private TKey GetKey(int index)
+        private KeyValuePair<TKey,TValue> GetEntry(int index)
         {
-            throw new NotImplementedException();
+            if (0 <= index && index < this.Count)
+            {
+                throw new NotImplementedException();
+            }
+            else
+                throw new ArgumentOutOfRangeException("Index was out of range. Must be non-negative and less than the size of the collection.");
+
         }
 
         private InternalNode NewInternalRoot(Node left, Node right)
@@ -446,11 +501,11 @@ namespace BTreePOC
         }
         #endregion
 
-        public class BTreeKeyCollection : ICollection<TKey>
+        public abstract class Collection<T> : ICollection<T>
         {
-            private BTreeDictionary<TKey, TValue> btree;
+            protected readonly BTreeDictionary<TKey, TValue> btree;
 
-            public BTreeKeyCollection(BTreeDictionary<TKey, TValue> btree)
+            protected Collection(BTreeDictionary<TKey, TValue> btree)
             {
                 this.btree = btree;
             }
@@ -459,9 +514,9 @@ namespace BTreePOC
 
             public bool IsReadOnly => true;
 
-            public TKey this[int index] => btree.GetKey(index);
+            public abstract T this[int index] { get; }
             
-            public void Add(TKey item)
+            public void Add(T item)
             {
                 throw new NotSupportedException();
             }
@@ -471,19 +526,13 @@ namespace BTreePOC
                 throw new NotSupportedException();
             }
 
-            public bool Contains(TKey item) => btree.ContainsKey(item);
+            public abstract bool Contains(T item);
 
-            public void CopyTo(TKey[] array, int arrayIndex)
-            {
-                throw new NotSupportedException();
-            }
+            public abstract void CopyTo(T[] array, int arrayIndex);
 
-            public IEnumerator<TKey> GetEnumerator()
-            {
-                return btree.Select(kv => kv.Key).GetEnumerator();
-            }
+            public abstract IEnumerator<T> GetEnumerator();
 
-            public bool Remove(TKey item)
+            public bool Remove(T item)
             {
                 throw new NotSupportedException();
             }
@@ -493,5 +542,60 @@ namespace BTreePOC
                 return GetEnumerator();
             }
         }
+
+        public class KeyCollection : Collection<TKey>
+        {
+            internal KeyCollection(BTreeDictionary<TKey, TValue> btree) : 
+                base(btree)
+            {
+            }
+
+            public override TKey this[int index] => btree.GetEntry(index).Key;
+
+            public override bool Contains(TKey item) => btree.ContainsKey(item);
+
+            public override void CopyTo(TKey[] array, int arrayIndex)
+            {
+                if (array == null) throw new ArgumentNullException(nameof(array));
+                if (arrayIndex < 0) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+                if (btree.Count > array.Length - arrayIndex) throw new ArgumentException();
+                var iDst = arrayIndex;
+                foreach (var item in btree)
+                {
+                    array[iDst++] = item.Key;
+                }
+            }
+
+            public int IndexOf(TKey item) => btree.IndexOfKey(item);
+
+            public override IEnumerator<TKey> GetEnumerator() => btree.Select(e => e.Key).GetEnumerator();
+        }
+
+        public class ValueCollection : Collection<TValue>
+        {
+            internal ValueCollection(BTreeDictionary<TKey, TValue> btree) :
+                base(btree)
+            {
+            }
+
+            public override TValue this[int index] => btree.GetEntry(index).Value;
+
+            public override bool Contains(TValue item) => btree.ContainsValue(item);
+
+            public override void CopyTo(TValue[] array, int arrayIndex)
+            {
+                if (array == null) throw new ArgumentNullException(nameof(array));
+                if (arrayIndex < 0) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+                if (btree.Count > array.Length - arrayIndex) throw new ArgumentException();
+                var iDst = arrayIndex;
+                foreach (var item in btree)
+                {
+                    array[iDst] = item.Value;
+                }
+            }
+
+            public override IEnumerator<TValue> GetEnumerator() => btree.Select(e => e.Value).GetEnumerator();
+        }
+
     }
 }
