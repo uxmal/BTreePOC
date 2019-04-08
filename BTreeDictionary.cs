@@ -41,9 +41,11 @@ namespace BTreePOC
 
             public abstract (Node, Node) Add(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree);
 
-            public abstract TValue Get(TKey key, BTreeDictionary<TKey, TValue> tree);
+            public abstract (TValue, bool) Get(TKey key, BTreeDictionary<TKey, TValue> tree);
 
             public abstract (Node, Node) Set(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree);
+
+            public abstract bool Remove(TKey key, BTreeDictionary<TKey, TValue> tree);
 
             public override string ToString()
             {
@@ -70,12 +72,12 @@ namespace BTreePOC
                 return Insert(~idx, key, value, tree);
             }
 
-            public override TValue Get(TKey key, BTreeDictionary<TKey, TValue> tree)
+            public override (TValue, bool) Get(TKey key, BTreeDictionary<TKey, TValue> tree)
             {
                 int idx = Array.BinarySearch(keys, 0, count, key, tree.cmp);
                 if (idx < 0)
-                    throw new KeyNotFoundException();
-                return values[idx];
+                    return (default(TValue), false);
+                return (values[idx], true);
             }
 
             public override (Node, Node) Set(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
@@ -87,6 +89,22 @@ namespace BTreePOC
                     return (this, null);
                 }
                 return Insert(~idx, key, value, tree);
+            }
+
+            public override bool Remove(TKey key, BTreeDictionary<TKey, TValue> tree)
+            {
+                int idx = Array.BinarySearch(keys, 0, count, key, tree.cmp);
+                if (idx >= 0)
+                {
+                    --count;
+                    --totalCount;
+                    Array.Copy(keys, idx + 1, keys, idx, count - idx);
+                    Array.Copy(values, idx + 1, values, idx, count - idx);
+                    keys[count] = default(TKey);
+                    values[count] = default(TValue);
+                    return true;
+                }
+                return false;
             }
 
             private (Node, Node) Insert(int idx, TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
@@ -192,9 +210,11 @@ namespace BTreePOC
             public override (Node, Node) Add(TKey key, TValue value, BTreeDictionary<TKey, TValue> tree)
             {
                 int idx = Array.BinarySearch(keys, 1, count-1, key, tree.cmp);
+                int iPos;
                 if (idx >= 0)
-                    throw new ArgumentException("Duplicate key.");
-                int iPos = (~idx) - 1;
+                    iPos = idx - 1;
+                else
+                    iPos = (~idx) - 1;
                 var subnode = nodes[iPos];
                 var (leftNode, rightNode) = subnode.Add(key, value, tree);
                 if (rightNode == null)
@@ -214,7 +234,7 @@ namespace BTreePOC
                 return Insert(~idx, node.keys[0], node, tree).Item1;
             }
 
-            public override TValue Get(TKey key, BTreeDictionary<TKey, TValue> tree)
+            public override (TValue, bool) Get(TKey key, BTreeDictionary<TKey, TValue> tree)
             {
                 int idx = Array.BinarySearch(keys, 1, count - 1, key, tree.cmp);
                 if (idx >= 0)
@@ -246,7 +266,24 @@ namespace BTreePOC
                 }
             }
 
-            internal (Node, Node) Insert(int idx, TKey key, Node node, BTreeDictionary<TKey, TValue> tree)
+            public override bool Remove(TKey key, BTreeDictionary<TKey, TValue> tree)
+            {
+                int idx = Array.BinarySearch(keys, 1, count - 1, key, tree.cmp);
+                bool removed;
+                if (idx >= 0)
+                {
+                    removed = nodes[idx].Remove(key, tree);
+                }
+                else
+                {
+                    var iPos = (~idx) - 1;
+                    removed = nodes[iPos].Remove(key, tree);
+                }
+                --this.totalCount;
+                return removed;
+            }
+
+            private (Node, Node) Insert(int idx, TKey key, Node node, BTreeDictionary<TKey, TValue> tree)
             {
                 if (count == keys.Length)
                 {
@@ -303,7 +340,10 @@ namespace BTreePOC
             {
                 if (root == null)
                     throw new KeyNotFoundException();
-                return root.Get(key, this);
+                var (value, found) = root.Get(key, this);
+                if (!found)
+                    throw new KeyNotFoundException();
+                return value;
             }
 
             set
@@ -318,6 +358,7 @@ namespace BTreePOC
         }
 
         ICollection<TKey> IDictionary<TKey, TValue>.Keys => Keys;
+
         ICollection<TValue> IDictionary<TKey, TValue>.Values => Values;
 
         public KeyCollection Keys => keyCollection;
@@ -340,22 +381,29 @@ namespace BTreePOC
 
         public void Add(KeyValuePair<TKey, TValue> item)
         {
-            throw new NotImplementedException();
+            Add(item.Key, item.Value);
         }
 
         public void Clear()
         {
-            throw new NotImplementedException();
+            ++version;
+            root = null;
         }
 
         public bool Contains(KeyValuePair<TKey, TValue> item)
         {
-            throw new NotImplementedException();
+            if (root == null)
+                return false;
+            var (value, found) = root.Get(item.Key, this);
+            return found && object.Equals(item.Value, value);
         }
 
         public bool ContainsKey(TKey key)
         {
-            throw new NotImplementedException();
+            if (root == null)
+                return false;
+            var (value, found) = root.Get(key, this);
+            return found;
         }
 
         public bool ContainsValue(TValue value)
@@ -365,7 +413,14 @@ namespace BTreePOC
 
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
-            throw new NotImplementedException();
+            if (array == null) throw new ArgumentNullException(nameof(array));
+            if (arrayIndex < 0) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+            if (this.Count > array.Length - arrayIndex) throw new ArgumentException();
+            int iDst = arrayIndex;
+            foreach (var item in this)
+            {
+                array[iDst++] = item;
+            }
         }
 
         public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
@@ -392,17 +447,26 @@ namespace BTreePOC
 
         public bool Remove(TKey key)
         {
-            throw new NotImplementedException();
+            if (root == null)
+                return false;
+            return root.Remove(key, this);
         }
 
-        public bool Remove(KeyValuePair<TKey, TValue> item)
+        bool ICollection<KeyValuePair<TKey,TValue>>.Remove(KeyValuePair<TKey, TValue> item)
         {
             throw new NotImplementedException();
         }
 
         public bool TryGetValue(TKey key, out TValue value)
         {
-            throw new NotImplementedException();
+            if (root == null)
+            {
+                value = default(TValue);
+                return false;
+            }
+            bool found;
+            (value, found) = root.Get(key, this);
+            return found;
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -421,7 +485,23 @@ namespace BTreePOC
         {
             if (0 <= index && index < this.Count)
             {
-                throw new NotImplementedException();
+                Node node = root;
+                int itemsLeft = index;
+                while (node is InternalNode intern)
+                {
+                    for (int i = 0; i < intern.count; ++i)
+                    {
+                        var subNode = intern.nodes[i];
+                        if (itemsLeft < subNode.totalCount)
+                        {
+                            node = subNode;
+                            break;
+                        }
+                        itemsLeft -= subNode.totalCount;
+                    }
+                }
+                var leaf = (LeafNode)node;
+                return new KeyValuePair<TKey, TValue>(leaf.keys[itemsLeft], leaf.values[itemsLeft]);
             }
             else
                 throw new ArgumentOutOfRangeException("Index was out of range. Must be non-negative and less than the size of the collection.");
@@ -596,6 +676,5 @@ namespace BTreePOC
 
             public override IEnumerator<TValue> GetEnumerator() => btree.Select(e => e.Value).GetEnumerator();
         }
-
     }
 }

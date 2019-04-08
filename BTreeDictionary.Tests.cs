@@ -78,7 +78,8 @@ namespace BTreePOC
             {
                 e.MoveNext();
                 Assert.Fail("Should have thrown exception");
-            } catch (InvalidOperationException)
+            }
+            catch (InvalidOperationException)
             {
             }
         }
@@ -262,6 +263,79 @@ namespace BTreePOC
             {
                 Assert.AreEqual(i, btree.Keys.IndexOf(items[i]));
             }
+        }
+
+        [Test]
+        public void BTree_GetItemByIndex()
+        {
+            var btree = Given_Dictionary(new[] {
+                5,6,9,1,3, 4,2,7,8,0,
+                10,18,17,12,14, 13,11,19,16,15});
+            var items = btree.Keys.ToArray();
+            for (int i = 0; i < btree.Count; ++i)
+            {
+                Assert.AreEqual(items[i], btree.Keys[i]);
+            }
+        }
+
+        [Test]
+        public void BTree_Remove_existing_leaf()
+        {
+            var btree = Given_Dictionary(new[] { 3 });
+            bool removed = btree.Remove("3");
+            Assert.IsTrue(removed);
+            Assert.AreEqual(0, btree.Count);
+            int items = 0;
+            foreach (var entry in btree)
+            {
+                ++items;
+            }
+            Assert.AreEqual(0, items);
+        }
+
+        [Test]
+        public void BTree_Remove_existing_leaf2()
+        {
+            var btree = Given_Dictionary(new[] { 3, 4 });
+            bool removed = btree.Remove("3");
+            Assert.IsTrue(removed);
+            Assert.AreEqual(1, btree.Count);
+            int items = 0;
+            foreach (var entry in btree)
+            {
+                ++items;
+            }
+            Assert.AreEqual(1, items);
+        }
+
+        [Test]
+        public void BTree_Remove_existing_deep_leaf()
+        {
+            var btree = Given_Dictionary(Enumerable.Range(0, 40));
+            bool removed = btree.Remove("3");
+            Assert.IsTrue(removed);
+            Assert.AreEqual(39, btree.Count);
+            int items = 0;
+            foreach (var entry in btree)
+            {
+                ++items;
+            }
+            Assert.AreEqual(39, items);
+        }
+
+        [Test]
+        public void BTree_Remove_Exercise()
+        {
+            var btree = Given_Dictionary(Enumerable.Range(0, 40));
+            foreach (var n in Enumerable.Range(0, 40))
+            {
+                Assert.IsTrue(btree.Remove(n.ToString()));
+            }
+            foreach (var n in Enumerable.Range(0, 40))
+            {
+                btree.Add(n.ToString(), n);
+            }
+            Assert.AreEqual(40, btree.Count);
         }
     }
 }
